@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: plagiarism-checker
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn plagiarism_checker.wsgi
+    envVars:
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: API_KEY
+        value: "AIzaSyCAeR7_6TTKzoJmSwmOuHZvKcVg_lhqvCc"
+      - key: SEARCH_ENGINE_ID
+        value: "758ad3e78879f0e08"
