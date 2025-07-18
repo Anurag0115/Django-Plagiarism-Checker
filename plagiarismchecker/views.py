@@ -1,97 +1,124 @@
 from django.shortcuts import render
 from django.http import HttpResponse
-from plagiarismchecker.algorithm import main
-from docx import *
-from plagiarismchecker.algorithm import fileSimilarity
-import PyPDF2 
+from plagiarismchecker.algorithm import main, fileSimilarity
+from docx import Document
+import traceback
+import PyPDF2
 
-# Create your views here.
-#home
+# Home
 def home(request):
-    return render(request, 'pc/index.html') 
+    return render(request, 'pc/index.html')
 
-#web search(Text)
+# Web Search (Text Input)
 def test(request):
-    print("request is welcome test")
-    print(request.POST['q'])  
-    
-    if request.POST['q']: 
-        percent,link = main.findSimilarity(request.POST['q'])
-        percent = round(percent,2)
-    print("Output.....................!!!!!!!!",percent,link)
-    return render(request, 'pc/index.html',{'link': link, 'percent': percent})
+    try:
+        print("request is welcome test")
+        query = request.POST.get('q', '').strip()
+        if query:
+            percent, link = main.findSimilarity(query)
+            percent = round(percent, 2)
+            print("Output: ", percent, link)
+            return render(request, 'pc/index.html', {'link': link, 'percent': percent})
+        else:
+            return HttpResponse("No query provided", status=400)
+    except Exception as e:
+        print("❌ ERROR in /test/:", e)
+        traceback.print_exc()
+        return HttpResponse("Internal Server Error", status=500)
 
-#web search file(.txt, .docx)
+# Web Search (File Input)
 def filetest(request):
-    value = ''    
-    print(request.FILES['docfile'])
-    if str(request.FILES['docfile']).endswith(".txt"):
-        value = str(request.FILES['docfile'].read())
+    try:
+        value = ''
+        uploaded_file = request.FILES.get('docfile', None)
 
-    elif str(request.FILES['docfile']).endswith(".docx"):
-        document = Document(request.FILES['docfile'])
-        for para in document.paragraphs:
-            value += para.text
+        if not uploaded_file:
+            return HttpResponse("No file uploaded", status=400)
 
-    elif str(request.FILES['docfile']).endswith(".pdf"):
-        # creating a pdf file object 
-        pdfFileObj = open(request.FILES['docfile'], 'rb') 
+        filename = uploaded_file.name.lower()
 
-        # creating a pdf reader object 
-        pdfReader = PyPDF2.PdfFileReader(pdfFileObj) 
+        if filename.endswith(".txt"):
+            value = str(uploaded_file.read(), 'utf-8', errors='ignore')
 
-        # printing number of pages in pdf file 
-        print(pdfReader.numPages) 
+        elif filename.endswith(".docx"):
+            document = Document(uploaded_file)
+            for para in document.paragraphs:
+                value += para.text + '\n'
 
-        # creating a page object 
-        pageObj = pdfReader.getPage(0) 
+        elif filename.endswith(".pdf"):
+            reader = PyPDF2.PdfReader(uploaded_file)
+            for page in reader.pages:
+                value += page.extract_text()
 
-        # extracting text from page 
-        print(pageObj.extractText()) 
+        if not value.strip():
+            return HttpResponse("Extracted text is empty", status=400)
 
-        # closing the pdf file object 
-        pdfFileObj.close() 
+        percent, link = main.findSimilarity(value)
+        percent = round(percent, 2)
+        print("Output:", percent, link)
+        return render(request, 'pc/index.html', {'link': link, 'percent': percent})
 
+    except Exception as e:
+        print("❌ ERROR in /filetest/:", e)
+        traceback.print_exc()
+        return HttpResponse("Internal Server Error", status=500)
 
-    percent,link = main.findSimilarity(value)
-    print("Output...................!!!!!!!!",percent,link)
-    return render(request, 'pc/index.html',{'link': link, 'percent': percent})
-
-#text compare
+# Text Compare Page
 def fileCompare(request):
-    return render(request, 'pc/doc_compare.html') 
+    return render(request, 'pc/doc_compare.html')
 
-#two text compare(Text)
+# Two Text Compare (Text Input)
 def twofiletest1(request):
-    print("Submiited text for 1st and 2nd")
-    print(request.POST['q1'])
-    print(request.POST['q2'])
+    try:
+        q1 = request.POST.get('q1', '').strip()
+        q2 = request.POST.get('q2', '').strip()
 
-    if request.POST['q1'] != '' and request.POST['q2'] != '': 
-        print("Got both the texts")
-        result = fileSimilarity.findFileSimilarity(request.POST['q1'],request.POST['q2'])
-    result = round(result,2)    
-    print("Output>>>>>>>>>>>>>>>>>>>>!!!!!!!!",result)
-    return render(request, 'pc/doc_compare.html',{'result': result})
-    
+        if q1 and q2:
+            result = fileSimilarity.findFileSimilarity(q1, q2)
+            result = round(result, 2)
+            print("Output:", result)
+            return render(request, 'pc/doc_compare.html', {'result': result})
+        else:
+            return HttpResponse("Both texts are required", status=400)
 
-#two text compare(.txt, .docx)
+    except Exception as e:
+        print("❌ ERROR in /twofiletest1/:", e)
+        traceback.print_exc()
+        return HttpResponse("Internal Server Error", status=500)
+
+# Two File Compare (File Input)
 def twofilecompare1(request):
-    value1 = ''
-    value2 = ''
-    if (str(request.FILES['docfile1'])).endswith(".txt") and (str(request.FILES['docfile2'])).endswith(".txt"):
-        value1 = str(request.FILES['docfile1'].read())
-        value2 = str(request.FILES['docfile2'].read())
+    try:
+        value1 = ''
+        value2 = ''
+        file1 = request.FILES.get('docfile1', None)
+        file2 = request.FILES.get('docfile2', None)
 
-    elif (str(request.FILES['docfile1'])).endswith(".docx") and (str(request.FILES['docfile2'])).endswith(".docx"):
-        document = Document(request.FILES['docfile1'])
-        for para in document.paragraphs:
-            value1 += para.text
-        document = Document(request.FILES['docfile2'])
-        for para in document.paragraphs:
-            value2 += para.text
+        if not file1 or not file2:
+            return HttpResponse("Both files are required", status=400)
 
-    result = fileSimilarity.findFileSimilarity(value1,value2)
-    
-    print("Output..................!!!!!!!!",result)
-    return render(request, 'pc/doc_compare.html',{'result': result})
+        name1 = file1.name.lower()
+        name2 = file2.name.lower()
+
+        if name1.endswith(".txt") and name2.endswith(".txt"):
+            value1 = str(file1.read(), 'utf-8', errors='ignore')
+            value2 = str(file2.read(), 'utf-8', errors='ignore')
+
+        elif name1.endswith(".docx") and name2.endswith(".docx"):
+            doc1 = Document(file1)
+            doc2 = Document(file2)
+            value1 = '\n'.join([p.text for p in doc1.paragraphs])
+            value2 = '\n'.join([p.text for p in doc2.paragraphs])
+
+        else:
+            return HttpResponse("Unsupported file types. Use .txt or .docx", status=400)
+
+        result = fileSimilarity.findFileSimilarity(value1, value2)
+        result = round(result, 2)
+        print("Output:", result)
+        return render(request, 'pc/doc_compare.html', {'result': result})
+
+    except Exception as e:
+        print("❌ ERROR in /twofilecompare1/:", e)
+        traceback.print_exc()
+        return HttpResponse("Internal Server Error", status=500)
